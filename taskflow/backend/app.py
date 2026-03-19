@@ -91,14 +91,21 @@ def criar_tarefa():
         titulo=dados['titulo'],
         descricao=dados.get('descricao', ''),
         concluida=False,
-        data_criacao=datetime.now().isoformat(),
+        data_criacao=datetime.now().utcnow(),
         data_conclusao=None
     )
 
     db.session.add(nova_tarefa) # Adiciona a nova tarefa na sessão do banco
     db.session.commit() # Salva as mudanças no banco (executa o INSERT)
 
-    return jsonify(nova_tarefa.to_dict()), 201 # Retorna a tarefa criada com o codigo 201 (Created)
+    return jsonify({
+        'id': nova_tarefa.id,
+        'titulo': nova_tarefa.titulo,
+        'descricao': nova_tarefa.descricao,
+        'concluida': nova_tarefa.concluida,
+        'data_criacao': nova_tarefa.data_criacao.isoformat() if nova_tarefa.data_criacao else None,
+        'data_conclusao': nova_tarefa.data_conclusao.isoformat() if nova_tarefa.data_conclusao else None
+    }), 201 # Retorna a tarefa criada com o codigo 201 (Created)
 
 
 
@@ -128,7 +135,7 @@ def atualizar_tarefa(id):
         tarefa.concluida = dados['concluida']
         # Se a tarefa foi marcada como concluída, atualiza a data de conclusão
         if dados['concluida'] is True:
-            tarefa.data_conclusao = datetime.now().isoformat()
+            tarefa.data_conclusao = datetime.now().utcnow() # Define a data de conclusão como o momento atual
         else:
             tarefa.data_conclusao = None # Se desmarcar como concluída, remove a data de conclusão
 
@@ -158,7 +165,7 @@ def deletar_tarefa(id):
 
 
 # Explicação da magia
-# [tarefa for tarefa in tarefas id tarefa['id'] != id] 
+# [tarefa for tarefa in tarefas if tarefa['id'] != id] 
 # Isso é uma 'list comprehension' - forma compacta de criar listas
 # Equivalente a: 
 # nova_lista = []
