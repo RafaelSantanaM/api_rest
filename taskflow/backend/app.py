@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from datetime import datetime
 # - 'request para ler o que o front fala
 # - 'jsonify para responder em json para o front
 
@@ -17,6 +18,7 @@ def home():
         'versao': '1.0 MVP',
         'endpoints_disponiveis': [
             'GET /tarefas - Listar todas',
+            'GET /tarefas/statistics - Ver estatísticas',
             'POST /tarefas - Criar nova',
             'PUT /tarefas/<id> - Atualizar',
             'DELETE /tarefas/<id> - Deletar'  
@@ -31,11 +33,36 @@ def home():
 # 
 # ' 
 
+
 @app.route('/tarefas', methods=['GET'])  # -> define a rota para listar tarefas
 def listar_tarefas():
-    return jsonify(tarefas) # retorna a lista de tarefas em formato JSON
+    filtrar_concluidas = request.args.get('concluidas') # Pega o parametro 'concluidas' da URL (ex: /tarefas?concluidas=true
+    if filtrar_concluidas is not None: # Se o parametro foi fornecido
+        # Convertendo o valor para booleano ( O python entende 'true' como True e 'false' como False)
+        if filtrar_concluidas.lower() == 'true':
+            tarefas_filtradas = [t for t in tarefas if t['concluida']]
+        elif filtrar_concluidas.lower() == 'false':
+            tarefas_filtradas = [t for t in tarefas if not t['concluida']]
+        else:
+            # Se o valor dor inválido, retorna erro ou losta vazia
+            return jsonify({'erro': 'Parâmetro concluídas deve ser true ou false'}), 400
+        return jsonify(tarefas_filtradas) # Retorna a lista filtrada
+    
+    # Se não tiver o parametro, retorna tudo
+    return jsonify(tarefas) # Retorna a lista completa de tarefas
 # - Quando alguem fizer get em /tarefas, retornamos a lista inteira.
 # - O jsonify converte a automaticamente a lista Python em JSON
+
+@app.route('/tarefas/statistics', methods=['GET'])
+def statistics():
+    total = len(tarefas) # Conta o total de tarefas na lista
+    concluidas = sum(1 for t in tarefas if t['concluida']) # Conta quantas tarefas estão marcadas como concluídas
+    pendentes = total - concluidas # O resto são pendentes
+    return jsonify({
+        'total': total,
+        'concluidas': concluidas,
+        'pendentes': pendentes
+    }) # Retorna um JSON com as estatísticas
 
 @app.route('/tarefas', methods=['POST']) # -> define a rota para criar nova tarefa
 def criar_tarefa():
@@ -48,13 +75,17 @@ def criar_tarefa():
     # - Se os dados forem nulos ou não tiverem a chave 'titulo', retornamos um erro 400 (Bad Request)
     # - 400 = Bad Request (erro do cliente)
 
+    if len(dados.get('titulo', '')) < 3: # Validação do tamanho minimo de caracteres
+        return jsonify({'erro': 'Título deve ter pelo menos 3 caracteres!'}), 400
+
     # Criar a nova tarefa
     nova_tarefa = {
         'id': contador_id, # Atribui o ID atual
         'titulo': dados['titulo'], # Pega o título do JSON enviado
         'descricao': dados.get('descricao', ''), # Se nao tiver descriçai, string vazia
         'concluida': False, # Tarefa nova começa nçao concluída
-        'data_criacao': '2026-01-01' # Drpois usaremos data real 
+        'data_criacao': datetime.now().isoformat(), # Usando horario real
+        'data_conclusao': None # Data de conclusão começa como None
     }
 
     tarefas.append(nova_tarefa) # Adiciona a nova tarefa na lista 
@@ -90,6 +121,11 @@ def atualizar_tarefa(id):
         tarefa_encontrada['descricao'] = dados['descricao']
     if 'concluida' in dados:
         tarefa_encontrada['concluida'] = dados['concluida']
+        # Se a tarefa foi marcada como concluída, atualiza a data de conclusão
+        if dados['concluida'] is True:
+            tarefa_encontrada['data_conclusao'] = datetime.now().isoformat()
+        else:
+            tarefa_encontrada['data_conclusao'] = None # Se desmarcar como concluída, remove a data de conclusão
 
     return jsonify(tarefa_encontrada) # Retorna a tarefa atualizada 
 
