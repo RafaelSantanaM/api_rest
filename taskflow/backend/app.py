@@ -1,21 +1,26 @@
 from flask import Flask, request, jsonify
 from datetime import datetime
+from database import db, init_app
+from models import Tarefa
 # - 'request para ler o que o front fala
 # - 'jsonify para responder em json para o front
 
 app = Flask(__name__) # cria uma instancia da aplicação web
 ## '__name__' é uma variável especial do Python que representa o nome do módulo atual.
 
+# Configuração do banco SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///taskflow.db' # Define o caminho do banco de dados SQLite (será criado na raiz do projeto)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Desativa um recurso que não precisamos e que gera um aviso (warning)
 
-tarefas = [] # lista para armazenar as tarefas
-contador_id = 1 # Para gerar IDs unicos
-## Refatorar mais tarde para adicionar SQLite
+# Inicializa o banco de dados com a aplicação
+init_app(app)
 
-@app.route('/', methods=['GET'])
+
+@app.route('/')
 def home():
     return jsonify({
-        'mensagem': 'API TaskFlow funcionando!',
-        'versao': '1.0 MVP',
+        'mensagem': 'API TaskFlow com bando de dados!',
+        'versao': '2.0',
         'endpoints_disponiveis': [
             'GET /tarefas - Listar todas',
             'GET /tarefas/statistics - Ver estatísticas',
@@ -33,30 +38,32 @@ def home():
 # 
 # ' 
 
-
+# Listar - com filtro opcional
 @app.route('/tarefas', methods=['GET'])  # -> define a rota para listar tarefas
 def listar_tarefas():
     filtrar_concluidas = request.args.get('concluidas') # Pega o parametro 'concluidas' da URL (ex: /tarefas?concluidas=true
+    
+    query = Tarefa.query # SELECT * FROM tarefas
+    
     if filtrar_concluidas is not None: # Se o parametro foi fornecido
         # Convertendo o valor para booleano ( O python entende 'true' como True e 'false' como False)
         if filtrar_concluidas.lower() == 'true':
-            tarefas_filtradas = [t for t in tarefas if t['concluida']]
+            query = query.filter_by(concluida=True) # Filtra só as tarefas concluídas
         elif filtrar_concluidas.lower() == 'false':
-            tarefas_filtradas = [t for t in tarefas if not t['concluida']]
+            query = query.filter_by(concluida=False) # Filtra só as tarefas não concluídas
         else:
             # Se o valor dor inválido, retorna erro ou losta vazia
             return jsonify({'erro': 'Parâmetro concluídas deve ser true ou false'}), 400
-        return jsonify(tarefas_filtradas) # Retorna a lista filtrada
-    
-    # Se não tiver o parametro, retorna tudo
-    return jsonify(tarefas) # Retorna a lista completa de tarefas
+        
+    tarefas = query.all() # Executa a consulta e pega os resultados filtrados
+    return jsonify([tarefa.to_dict() for tarefa in tarefas]) # Retorna a lista filtrada
 # - Quando alguem fizer get em /tarefas, retornamos a lista inteira.
 # - O jsonify converte a automaticamente a lista Python em JSON
 
 @app.route('/tarefas/statistics', methods=['GET'])
 def statistics():
-    total = len(tarefas) # Conta o total de tarefas na lista
-    concluidas = sum(1 for t in tarefas if t['concluida']) # Conta quantas tarefas estão marcadas como concluídas
+    total = Tarefa.query.count() # Conta o total de tarefas na lista
+    concluidas = Tarefa.query.filter_by(concluida=True).count() # Conta quantas tarefas estão marcadas como concluídas
     pendentes = total - concluidas # O resto são pendentes
     return jsonify({
         'total': total,
@@ -64,10 +71,11 @@ def statistics():
         'pendentes': pendentes
     }) # Retorna um JSON com as estatísticas
 
+# Criar tarefa (POST)
 @app.route('/tarefas', methods=['POST']) # -> define a rota para criar nova tarefa
 def criar_tarefa():
-    global contador_id # precisamos dizer que vamos modificar a variável global contador_id
     dados = request.get_json() # request.get_json() pega os dados que o front enviou
+
 
     # Validação básica: título é obrigatório
     if not dados or 'titulo' not in dados:
@@ -79,18 +87,18 @@ def criar_tarefa():
         return jsonify({'erro': 'Título deve ter pelo menos 3 caracteres!'}), 400
 
     # Criar a nova tarefa
-    nova_tarefa = {
-        'id': contador_id, # Atribui o ID atual
-        'titulo': dados['titulo'], # Pega o título do JSON enviado
-        'descricao': dados.get('descricao', ''), # Se nao tiver descriçai, string vazia
-        'concluida': False, # Tarefa nova começa nçao concluída
-        'data_criacao': datetime.now().isoformat(), # Usando horario real
-        'data_conclusao': None # Data de conclusão começa como None
-    }
+    nova_tarefa = Tarefa(
+        titulo=dados['titulo'],
+        descricao=dados.get('descricao', ''),
+        concluida=False,
+        data_criacao=datetime.now().isoformat(),
+        data_conclusao=None
+    )
 
-    tarefas.append(nova_tarefa) # Adiciona a nova tarefa na lista 
-    contador_id += 1 # Incrementa o contador para a próxima taref
-    return jsonify(nova_tarefa), 201 # Retorna a tarefa criada com o codigo 201 (Created)
+    db.session.add(nova_tarefa) # Adiciona a nova tarefa na sessão do banco
+    db.session.commit() # Salva as mudanças no banco (executa o INSERT)
+
+    return jsonify(nova_tarefa.to_dict()), 201 # Retorna a tarefa criada com o codigo 201 (Created)
 
 
 
@@ -101,14 +109,11 @@ def atualizar_tarefa(id):
     # Ex: PUT /tarefas/3 -> id = 3
 
     # Procura a tarefa na lista
-    tarefa_encontrada = None
-    for tarefa in tarefas:
-        if tarefa['id'] == id:
-            tarefa_encontrada = tarefa
-            break
+    tarefa = Tarefa.query.get(id) # SELECT * FROM tarefas WHERE id = id LIMIT 1 ( busca por chave primaria)
+
 
     #Se nao encontrou, retorna 404
-    if not tarefa_encontrada:
+    if not tarefa:
         return jsonify({'erro': 'Tarefa não encontrada'}), 404
 
     # Pega os dados enviados
@@ -116,18 +121,20 @@ def atualizar_tarefa(id):
 
 # Atualiza apenas os campos enviados
     if 'titulo' in dados:
-        tarefa_encontrada['titulo'] = dados['titulo']
+        tarefa.titulo = dados['titulo']
     if 'descricao' in dados:
-        tarefa_encontrada['descricao'] = dados['descricao']
+        tarefa.descricao = dados['descricao']
     if 'concluida' in dados:
-        tarefa_encontrada['concluida'] = dados['concluida']
+        tarefa.concluida = dados['concluida']
         # Se a tarefa foi marcada como concluída, atualiza a data de conclusão
         if dados['concluida'] is True:
-            tarefa_encontrada['data_conclusao'] = datetime.now().isoformat()
+            tarefa.data_conclusao = datetime.now().isoformat()
         else:
-            tarefa_encontrada['data_conclusao'] = None # Se desmarcar como concluída, remove a data de conclusão
+            tarefa.data_conclusao = None # Se desmarcar como concluída, remove a data de conclusão
 
-    return jsonify(tarefa_encontrada) # Retorna a tarefa atualizada 
+    db.session.commit() # Salva as mudanças no banco (executa o UPDATE)
+
+    return jsonify(tarefa.to_dict()) # Retorna a tarefa atualizada 
 
 
 # Aqui, o PUT é usado para atualizar uma tarefa existente.
@@ -139,16 +146,14 @@ def atualizar_tarefa(id):
 # Deletar tarefa (DELETE)
 @app.route('/tarefas/<int:id>', methods=['DELETE']) # -> define a rota para deletar tarefa
 def deletar_tarefa(id):
-    global tarefas # Vamos modificar a lista
-
-    # Filtra a lista mantendo só as tarefas com ID diferente
-    tarefas_originais = len(tarefas) # Guarda o tamanho original para verificar se deletou algo
-    tarefas = [tarefa for tarefa in tarefas if tarefa['id'] != id] # - Cria uma nova lista com todas as tarefas exceto a que tem o ID que queremos deletar
-
-    # Se o tamanho não mudou, é porque não encontrou
-    if len(tarefas) == tarefas_originais:
-        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+    tarefa = Tarefa.query.get(id) # Busca a tarefa pelo ID
     
+    if not tarefa:
+        return jsonify({'erro': 'Tarefa não encontrada'}), 404
+
+    db.session.delete(tarefa)
+    db.session.commit()
+
     return jsonify({'mensagem': 'Tarefa deletada com sucesso!'}) # Retorna mensagem de sucesso
 
 
@@ -164,15 +169,6 @@ def deletar_tarefa(id):
 
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("     TaskFlow API - Modo Desenvolvimento")
-    print("     Endpoints disponíveis:")
-    print("     GET      /")
-    print("     GET      /tarefas")
-    print("     POST     /tarefas")
-    print("     PUT      /tarefas/<int:id>")
-    print("     DELETE   /tarefas/<int:id>")
-    print("=" * 50)
     app.run(debug=True, port=5000) # Inicia a aplicação Flask em modo debug (recarrega
 
     # if __name__ == '__main__' significa:
