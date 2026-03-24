@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from datetime import datetime
+from datetime import datetime, timezone
 from database import db, init_app
 from models import Tarefa
 # - 'request para ler o que o front fala
