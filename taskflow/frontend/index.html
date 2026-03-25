@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8"> # Define a codificação de caracteres para UTF-8
+        <meta name="viewpoint" content="width=device-width, initial-scale=1.0"> #<meta name="vierport" -> torna a página responsiva em dispoditivos móveis
+        <title>TaskFlow | Gerenciador de Tarefas</title>
+        <link rel="stylesheet" href="style.css">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"> # Importa a fonte Inter do Google Fonts
+    </head>
+    <body>
+        <div class="Container"> # Centraliza o conteúdo e dá um fundo em branco.
+            <!-- Cabeçalho -->
+            <header>
+                <h1>📋 TaskFlow</h1>
+                <p>Organize suas tarefas com estilo</p>
+            </header>
+
+        <!-- Estatísticas -->
+        <div class="stats-container"> # *Três cartões que exibirão números atualizados dinamicamente.
+            <div class="stat-card">
+                <h3>Total de Tarefas</h3>
+                <p id="totalTasks">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Tarefas Concluídas</h3>
+                <p id="completedTasks">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Tarefas Pendentes</h3>
+                <p id="pendingTasks">0</p>
+            </div>
+        </div>
+
+        <!--  Formulário para nova Tarefa  -->
+          <div class="task-form"> # Campos para descrição e título, e um botão para criar.
+            <h2>➕ Nova tarefa</h2>
+            <div class="form-row">>
+                <input type="text" id="taskTitle" placeholder="Título (mínimo 3 caracteres)" required>
+                <textarea id="taskDesc" placeholder="Descrição (opcional)" rows="2"></textarea>
+                <button id="createBtn" class="btn-primary">Criar Tarefa</button>
+            </div>
+        </div>
+
+        <!--  Filtro  -->
+        <div class="filters"> # Um select que permitirá filtra as tarefas por status.
+            <label> Filtrar por status:</label>
+            <select id="statusFilter">
+                <option value="all">Todas</option>
+                <option value="false">Pendentes</option>
+                <option value="true">Concluídas</option>
+            </select>
+        </div>
+
+        <!--  Lista de Tarefas  -->
+          <div id="taskList" class="task-list"> # <div id="tasksList"> onde as tarefas serão renderizadas pelo Javascript
+            <!--  As tarefas serão inseridas aqui pelo Javascript-->
+              <p class="loading">Carregando tarefas...</p>
+          </div>
+    </div>
+
+    <script src="scripts.js"></script> # Carrega o script.js no final do body
+        
+    </body>
+</body>
+</html>
